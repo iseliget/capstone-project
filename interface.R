@@ -1,4 +1,5 @@
 library('FNN');
+library('ggplot2');
 
 
 # open pdf device
@@ -20,7 +21,6 @@ exchange_rate = as.matrix(exchange_rate);
 tickers = c("AUD","BRL","CAD","CNY","EUR","INR","JPY","KRW","MXN","NZD","NOK","RUB","SGD","ZAR","SEK","CHF","GBP","USD");
 
 xrate = exchange_rate[,1:18]; 
-
 # don't forget to transfor the original matrix into the return matrix!
 # I forgot to do that last night and my sharpe ratio was like 300 and I was so happy :-D
 xrate = log(xrate[2:nrow(xrate),] / xrate[1:(nrow(xrate)-1),]);
@@ -29,14 +29,10 @@ xrate = log(xrate[2:nrow(xrate),] / xrate[1:(nrow(xrate)-1),]);
 #------------FUNCTIONS FOR REGRESSIONS START------------#
 regress = function(X_train, y_train, X_test, method) {
 	if (method == 'lm') {
-		#print ('Performing linear regression......');
 		linear_regression(X_train, y_train, X_test);
-		# print ('Linear regression done!');
 	}
 	else if (method == 'knn') {
-		print ('Performing kNN regression with k=10......');
-		#knn function here with k=10;
-		print ('kNN regression done!');
+		knn(X_train,y_train,X_test);
 	}
 }
 
@@ -83,14 +79,14 @@ knn = function(X_train, y_train, X_test) {
 
 	return (y_hat);
 }
+
 #------------FUNCTIONS FOR REGRESSION END---------------#
 
 
 #------------FUNCTIONS FOR DIMENSION REDUCTION START----------#
-dimreduc = function(X_highdim, method, n) {
+dimreduc = function(X_highdim, method, n=5) {
 	if (method == 'PCA' || method == 'pca') {
 		pca(X_highdim,n);
-		# print ('Principal Component Analysis done!');
 	}
 	else if (method =='kpca' || method == 'kPCA') {
 		# print ('Performing kernal PCA......');
@@ -98,9 +94,7 @@ dimreduc = function(X_highdim, method, n) {
 		# print ('Kernal PCA done!');
 	}
 	else if (method == 'difmap') {
-		# print ('Performing Diffusion Map......');
-		# #difmap(X_train);
-		# print ('Diffusion Map done!');
+		diffusionmap(X_highdim,0.5);
 	}
 	else if (method == 'laplacian' || method == 'Laplacian') {
 		# print ('Performing Laplacian Eigenmaps......');
@@ -123,6 +117,38 @@ pca = function(X_highdim, n) {
 
 	return (X_lowdim);
 }
+
+diffusionmap = function(X_highdim, alpha=0.75) {
+
+	#Create Gaussian kernel matrix
+	DIST = dist(X_highdim, method = "euclidean", diag = FALSE, upper = TRUE, p = 2);
+	DIST = as.matrix(DIST);
+	K = DIST^2;
+	K = (-1/alpha)*K;
+	K = exp(K);
+
+	#Create diffusion matrix. Recall that diffusion matrix P = D^(-1) %*% K
+	#Where D is diagonal consisting row-sums of K
+	D = matrix(data=0,nrow=dim(K)[1],ncol=dim(K)[2]);
+	for (i in 1:dim(K)[1]) {
+		D[i,i] = sum(K[,i]);
+	}
+
+	#Create matrix P
+	P = solve(D) %*% K;#solve calculates the inverse of D
+
+	#Calculate eigenvectors of D
+	eigen_P = eigen(P);
+	# eigenvectors_P = eigen_P$vectors[,1:2];
+	eigenvectors_P = eigen_P$vectors[,2:3];
+	eigenvectors_P = as.matrix(eigenvectors_P);
+
+	return (eigenvectors_P);
+	#colnames(test) = c('x','y','type');
+	#plot = ggplot(test,aes(y,x));
+	#print(plot + geom_point(aes(colour=factor(type))));
+}
+
 #------------FUNCTIONS FOR DIMENSION REDUCTION END------------#
 
 compute_Sharpe_Ratio = function(x){
@@ -139,16 +165,14 @@ main = function() {
 	rownames(stats) = tickers;
 	colnames(stats) = c('average_pnl','yearly_pnl','total_pnl','sharpe');
 
-	#calculation and generate daily_pnl
+	# calculation and generate daily_pnl
 	for (i in 101:(nrow(xrate)-1)) {
-		X_lowdim = dimreduc(xrate[(i-100):i,],'pca',5); # first reduce the dimension
+		X_lowdim = dimreduc(xrate[(i-100):i,],'difmap'); # first reduce the dimension
 		for (j in 1:18) { #loop through all currencies
-			y_hat = regress(X_lowdim[1:100,],xrate[(i-99):i,j,drop=FALSE],X_lowdim[101,,drop=FALSE],'lm');
+			y_hat = regress(X_lowdim[1:100,],xrate[(i-99):i,j,drop=FALSE],X_lowdim[101,,drop=FALSE],'knn');
 			daily_pnl[i-100,j] = sign(y_hat) * xrate[i+1,j];
 		}
 	}
-
-	print(head(daily_pnl));
 
 	#calculate performance statistics
 	stats[,'average_pnl'] = apply(daily_pnl,2,mean);
