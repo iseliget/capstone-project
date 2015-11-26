@@ -3,7 +3,7 @@ library('ggplot2');
 
 
 # open pdf device
-pdf('output.pdf',width=22,height=12);
+#pdf('output.pdf',width=22,height=12);
 
 # loading data...
 exchange_rate = read.csv('exchange_rate.csv',sep=',',header=TRUE, na.strings='');
@@ -27,12 +27,12 @@ xrate = log(xrate[2:nrow(xrate),] / xrate[1:(nrow(xrate)-1),]);
 
 
 #------------FUNCTIONS FOR REGRESSIONS START------------#
-regress = function(X_train, y_train, X_test, method) {
+regress = function(X_train, y_train, X_test, method, k=10) {
 	if (method == 'lm') {
 		linear_regression(X_train, y_train, X_test);
 	}
 	else if (method == 'knn') {
-		knn(X_train,y_train,X_test);
+		knn(X_train,y_train,X_test,k);
 	}
 }
 
@@ -45,9 +45,11 @@ linear_regression = function(X_train, y_train, X_test) {
 
 	colnames(y_train) = 'y'
 
+
 	both = data.frame(X_train, y  = y_train);
 
 	regObj = lm(y ~ . , data = both)  # with intercept  beta_0
+
 
 	# regObj = lm(y ~ . +0, data = both)  # without intercept  beta_0
 
@@ -63,6 +65,7 @@ linear_regression = function(X_train, y_train, X_test) {
 	# apply the beta's to X_test and compute your prediction:
 	X_test = data.frame(X_test);
 
+
 	y_hat_obj = predict(regObj, newdata = X_test, se.fit = TRUE)
 
 	y_hat = y_hat_obj$fit;
@@ -73,8 +76,8 @@ linear_regression = function(X_train, y_train, X_test) {
 	return(y_hat)
 }
 
-knn = function(X_train, y_train, X_test) {
-	knnObj = knn.reg(train=X_train, test=X_test, y=y_train, k=10);
+knn = function(X_train, y_train, X_test, k) {
+	knnObj = knn.reg(train=X_train, test=X_test, y=y_train, k);
 	y_hat = knnObj$pred;
 
 	return (y_hat);
@@ -97,9 +100,7 @@ dimreduc = function(X_highdim, method, n=5) {
 		diffusionmap(X_highdim,0.5);
 	}
 	else if (method == 'laplacian' || method == 'Laplacian') {
-		# print ('Performing Laplacian Eigenmaps......');
-		# #laplacian(X_train);
-		# print ('Laplacian Eigenmaps done!');
+		laplacian(X_train);
 	}
 	else {
 		# print ('ENTER THE FOLLOWING ARGUMENTS AS A STRING:');
@@ -139,7 +140,8 @@ diffusionmap = function(X_highdim, alpha=0.75) {
 
 	#Calculate eigenvectors of D
 	eigen_P = eigen(P);
-	# eigenvectors_P = eigen_P$vectors[,1:2];
+
+	# remember that the first eigenvector is always trivial
 	eigenvectors_P = eigen_P$vectors[,2:3];
 	eigenvectors_P = as.matrix(eigenvectors_P);
 
@@ -147,6 +149,11 @@ diffusionmap = function(X_highdim, alpha=0.75) {
 	#colnames(test) = c('x','y','type');
 	#plot = ggplot(test,aes(y,x));
 	#print(plot + geom_point(aes(colour=factor(type))));
+}
+
+laplacian = function(X_highdim) {
+	# construct adjacency matrix using k-nearest neighbor
+
 }
 
 #------------FUNCTIONS FOR DIMENSION REDUCTION END------------#
@@ -167,20 +174,54 @@ main = function() {
 
 	# calculation and generate daily_pnl
 	for (i in 101:(nrow(xrate)-1)) {
-		X_lowdim = dimreduc(xrate[(i-100):i,],'difmap'); # first reduce the dimension
+		X_lowdim = dimreduc(xrate[(i-100):i,],'pca',5); # first reduce the dimension
 		for (j in 1:18) { #loop through all currencies
-			y_hat = regress(X_lowdim[1:100,],xrate[(i-99):i,j,drop=FALSE],X_lowdim[101,,drop=FALSE],'knn');
+			y_hat = regress(X_lowdim[1:100,], xrate[(i-99):i,j,drop=FALSE], X_lowdim[101,,drop=FALSE],'lm');
 			daily_pnl[i-100,j] = sign(y_hat) * xrate[i+1,j];
 		}
 	}
 
 	#calculate performance statistics
+	cum_daily_pnl = apply(daily_pnl,2,cumsum);
+
 	stats[,'average_pnl'] = apply(daily_pnl,2,mean);
 	stats[,'yearly_pnl'] = apply(daily_pnl,2,mean)*252;
-	#stats[,'total_pnl'] = apply(daily_pnl,2,cumsum);
+	stats[,'total_pnl'] = cum_daily_pnl[dim(cum_daily_pnl)[1],,drop=FALSE];
 	stats[,'sharpe'] = apply(daily_pnl,2,compute_Sharpe_Ratio);
+	stats= round(stats,5);
 
 	print(stats);
 }
 
-dev.off();
+residualpredict = function() {
+	# set up matrices to record performance
+	daily_pnl = matrix(data=NA,nrow=(nrow(xrate)-101),ncol=18);
+	colnames(daily_pnl) = tickers;
+
+	stats = matrix(data=NA,nrow=18,ncol=4);
+	rownames(stats) = tickers;
+	colnames(stats) = c('average_pnl','yearly_pnl','total_pnl','sharpe');
+
+	# calculation and generate daily_pnl
+	for (i in 101:(nrow(xrate)-1)) {
+		X_lowdim = dimreduc(xrate[(i-100):(i-1),],'pca',5); # dimension of 100 * 5
+		for (j in 1:18) {
+			y_hat_temp = regress(X_lowdim[1:100,], xrate[(i-99):i,j,drop=FALSE], X_lowdim[1:100,],'lm'); 
+			residual = y_hat_temp - xrate[(i-99):i,j,drop=FALSE]; # there will be 100 residuals
+			y_hat = regress(residual[1:99,1,drop=FALSE], xrate[(i-98):i,j,drop=FALSE], residual[100,1,drop=FALSE],'lm');
+			daily_pnl[i-100,j] = sign(y_hat) * xrate[i+1,j];
+		}
+	}
+
+	#calculate performance statistics
+	cum_daily_pnl = apply(daily_pnl,2,cumsum);
+
+	stats[,'average_pnl'] = apply(daily_pnl,2,mean);
+	stats[,'yearly_pnl'] = apply(daily_pnl,2,mean)*252;
+	stats[,'total_pnl'] = cum_daily_pnl[dim(cum_daily_pnl)[1],,drop=FALSE];
+	stats[,'sharpe'] = apply(daily_pnl,2,compute_Sharpe_Ratio);
+	stats= round(stats,5);
+
+	print(stats);
+}
+#dev.off();
