@@ -23,7 +23,6 @@ We use the following four statistics to evaluate the performance of the models:
 2. Total profit and loss
 3. Cumulative profit and loss
 4. Sharpe ratio
-5. 
 
 ### Possible improvement
 - **Number of principal components to keep**
