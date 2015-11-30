@@ -1,6 +1,19 @@
 ## Capstone Project of Math 191: Predicting foreign exchange rate
 
 ### Methodology
+We employ a variety of dimensionality reduction techniques:
+
+1. Principal componenet analysis (PCA)
+2. Diffusion map
+3. Laplacian eigenmaps
+
+We also utilize different regression techniques:
+
+1. Ordinary multiple linear regression
+2. KNN regression
+3. Ridge regression
+
+In addition, we also explore the predicting power of the residual of regression models (mean-reversion).
 
 ### Evaluation
 
