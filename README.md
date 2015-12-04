@@ -33,7 +33,7 @@ A rule of thumb that people often use is to let k equal to the square root of th
 
 - **Predicting power of residuals**
 
-Given a built model, we can obtain a vector of residuals. Does this vector have any predicting power? This seems to be correlated with the __mean reversion assumption__
+Given a built model, we can obtain a vector of residuals. Does this vector have any predicting power? This seems to be correlated with the _mean reversion assumption_.
 
 - **Better ways of handling `NA` in the dataset**
 
