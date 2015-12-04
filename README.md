@@ -29,8 +29,12 @@ There are two possible ways to do this. The first way is that, for each iteratio
 
 - **How to choose k in KNN regression**
 
+A rule of thumb that people often use is to let k equal to the square root of the number of training samples. Is there any other way of doing this? A method that has some sort of theoretical support would be favorable, just like Marcenko-Pastur and PCA.
+
 - **Predicting power of residuals**
+
+Given a built model, we can obtain a vector of residuals. Does this vector have any predicting power? This seems to be correlated with the __mean reversion assumption__
 
 - **Better ways of handling `NA` in the dataset**
 
-A naive way is just dropping all the `NA`s in the dataset, which still leaves us with sufficient amount of data to build the models. Is there any other better way of doing this? A couple of options:
+A naive way is just dropping all the `NA`s in the dataset, which still leaves us with sufficient amount of data to build the models. Is there any other better way of doing this? We can consider linear/non-linear extrapolation.
