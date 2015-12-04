@@ -1,5 +1,5 @@
 library('FNN');
-library('ggplot2');
+library('MASS'); # packages used for ridge regression
 
 
 # open pdf device
@@ -27,12 +27,15 @@ xrate = log(xrate[2:nrow(xrate),] / xrate[1:(nrow(xrate)-1),]);
 
 
 #------------FUNCTIONS FOR REGRESSIONS START------------#
-regress = function(X_train, y_train, X_test, method, k=10) {
+regress = function(X_train, y_train, X_test, method) {
 	if (method == 'lm') {
 		linear_regression(X_train, y_train, X_test);
 	}
 	else if (method == 'knn') {
-		knn(X_train,y_train,X_test,k);
+		knn(X_train,y_train,X_test,k=10);
+	}
+	else if (method == 'ridge') {
+		ridge(X_train,y_train,X_test);
 	}
 }
 
@@ -83,13 +86,23 @@ knn = function(X_train, y_train, X_test, k) {
 	return (y_hat);
 }
 
+ridge = function(X_train, y_train, X_test) {
+	colnames(y_train) = 'y';
+	both = data.frame(X_train, y=y_train);
+	ridgeObj = lm.ridge(y~.,data=both,lambda=5);
+	coefficients = ridgeObj$coef;
+	y_hat = X_test %*% coefficients;
+
+	return (y_hat);
+}
+
 #------------FUNCTIONS FOR REGRESSION END---------------#
 
 
 #------------FUNCTIONS FOR DIMENSION REDUCTION START----------#
-dimreduc = function(X_highdim, method, n=5) {
+dimreduc = function(X_highdim, method) {
 	if (method == 'PCA' || method == 'pca') {
-		pca(X_highdim,n);
+		pca(X_highdim);
 	}
 	else if (method =='kpca' || method == 'kPCA') {
 		# print ('Performing kernal PCA......');
@@ -102,6 +115,9 @@ dimreduc = function(X_highdim, method, n=5) {
 	else if (method == 'laplacian' || method == 'Laplacian') {
 		laplacian(X_train);
 	}
+	else if (method == 'none') {
+		return (X_highdim); #basically does nothing
+	}
 	else {
 		# print ('ENTER THE FOLLOWING ARGUMENTS AS A STRING:');
 		# print ('Principal Component Analysis: Enter \'pca\'');
@@ -111,9 +127,21 @@ dimreduc = function(X_highdim, method, n=5) {
 	}
 }
 
-pca = function(X_highdim, n) {
+pca = function(X_highdim) {
 	pcaObj = prcomp(X_highdim,scale=TRUE,center=TRUE,retx=TRUE);
-	dim_reduc_matrix = pcaObj$rotation[,1:n];
+	# choose n such that it explains 80% of the variance
+	# d = 0; variance_explained = 0.0;
+	# while (variance_explained < 0.8) {
+	# 	d = d + 1;
+	# 	variance_explained = sum((pcaObj$sd[1:d])^2)/sum((pcaObj$sd)^2);
+	# };
+	q = pcaObj$sdev;
+	# print( cumsum(q))
+	# print( cumsum(q^2) / sum( q^2) )
+	cumProp = cumsum(q^2) / sum(q^2);
+	d = min( which ( cumProp > 80/100 ) );
+
+	dim_reduc_matrix = pcaObj$rotation[,1:d];
 	X_lowdim = X_highdim %*% dim_reduc_matrix;
 
 	return (X_lowdim);
@@ -153,7 +181,6 @@ diffusionmap = function(X_highdim, alpha=0.75) {
 
 laplacian = function(X_highdim) {
 	# construct adjacency matrix using k-nearest neighbor
-
 }
 
 #------------FUNCTIONS FOR DIMENSION REDUCTION END------------#
@@ -164,6 +191,10 @@ compute_Sharpe_Ratio = function(x){
 }
 
 main = function() {
+	#parameters
+	dimred_method = 'pca';
+	reg_method = 'lm';
+
 	# set up matrices to record performance
 	daily_pnl = matrix(data=NA,nrow=(nrow(xrate)-101),ncol=18);
 	colnames(daily_pnl) = tickers;
@@ -174,14 +205,54 @@ main = function() {
 
 	# calculation and generate daily_pnl
 	for (i in 101:(nrow(xrate)-1)) {
-		X_lowdim = dimreduc(xrate[(i-100):i,],'pca',5); # first reduce the dimension
+		X_lowdim = dimreduc(xrate[(i-100):i,],dimred_method); # first reduce the dimension
 		for (j in 1:18) { #loop through all currencies
-			y_hat = regress(X_lowdim[1:100,], xrate[(i-99):i,j,drop=FALSE], X_lowdim[101,,drop=FALSE],'lm');
+			y_hat = regress(X_lowdim[1:100,], xrate[(i-99):i,j,drop=FALSE], X_lowdim[101,,drop=FALSE],reg_method);
 			daily_pnl[i-100,j] = sign(y_hat) * xrate[i+1,j];
 		}
 	}
 
-	#calculate performance statistics
+	# calculate performance statistics
+	cum_daily_pnl = apply(daily_pnl,2,cumsum);
+	#plot(cum_daily_pnl[,1,drop=FALSE],type='l');
+	stats[,'average_pnl'] = apply(daily_pnl,2,mean);
+	stats[,'yearly_pnl'] = apply(daily_pnl,2,mean)*252;
+	stats[,'total_pnl'] = cum_daily_pnl[dim(cum_daily_pnl)[1],,drop=FALSE];
+	stats[,'sharpe'] = apply(daily_pnl,2,compute_Sharpe_Ratio);
+	stats= round(stats,5);
+	print('Statistics:')
+	print(stats);
+
+	# calculate portfolio sharpe ratio
+	temp = rowSums(daily_pnl);
+
+	porto_sharpe = compute_Sharpe_Ratio(temp);
+	print('Portfolio Sharpe Ratio:')
+	print(porto_sharpe);
+
+	# plot portfolio cumulative pnl
+	temp3 = cumsum(temp);
+	plot(temp3,type='l',main=paste('Cumulative pnl,',dimred_method,reg_method,sep=' '),xlab='Days',ylab='Cumulative pnl');
+}
+
+ridge_reg = function() {
+	# set up matrices to record performance
+	daily_pnl = matrix(data=NA,nrow=(nrow(xrate)-101),ncol=18);
+	colnames(daily_pnl) = tickers;
+
+	stats = matrix(data=NA,nrow=18,ncol=4);
+	rownames(stats) = tickers;
+	colnames(stats) = c('average_pnl','yearly_pnl','total_pnl','sharpe');
+
+	# calculation and generate daily_pnl
+	for (i in 101:(nrow(xrate)-1)) {
+		for (j in 1:18) {
+			y_hat = regress(xrate[(i-100):(i-1),],xrate[(i-100):(i-1),j,drop=FALSE],xrate[i,,drop=FALSE],'ridge');
+			daily_pnl[i-100,j] = sign(y_hat) * xrate[i+1,j];
+		}
+	}
+
+	# calculate performance statistics
 	cum_daily_pnl = apply(daily_pnl,2,cumsum);
 
 	stats[,'average_pnl'] = apply(daily_pnl,2,mean);
@@ -189,8 +260,13 @@ main = function() {
 	stats[,'total_pnl'] = cum_daily_pnl[dim(cum_daily_pnl)[1],,drop=FALSE];
 	stats[,'sharpe'] = apply(daily_pnl,2,compute_Sharpe_Ratio);
 	stats= round(stats,5);
-
 	print(stats);
+
+	# calculate portfolio sharpe ratio
+	temp = rowSums(daily_pnl);
+	porto_sharpe = compute_Sharpe_Ratio(temp);
+	print('Portfolio Sharpe Ratio:')
+	print(porto_sharpe);
 }
 
 residualpredict = function() {
@@ -204,7 +280,7 @@ residualpredict = function() {
 
 	# calculation and generate daily_pnl
 	for (i in 101:(nrow(xrate)-1)) {
-		X_lowdim = dimreduc(xrate[(i-100):(i-1),],'pca',5); # dimension of 100 * 5
+		X_lowdim = dimreduc(xrate[(i-100):(i-1),],'pca'); # dimension of 100 * 5
 		for (j in 1:18) {
 			y_hat_temp = regress(X_lowdim[1:100,], xrate[(i-99):i,j,drop=FALSE], X_lowdim[1:100,],'lm'); 
 			residual = y_hat_temp - xrate[(i-99):i,j,drop=FALSE]; # there will be 100 residuals
