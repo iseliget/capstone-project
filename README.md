@@ -1,5 +1,11 @@
 ## Capstone Project of Math 191: Predicting foreign exchange rate
 
+### Code structure
+ `main.r`: This is the file you should load. It will load the following three.
+ `dimred_functions.r`: Contains functions used to perform dimension reduction.
+ `reg_functions.r`: Contains functions used to perform dimension reduction.
+ `misc_functions.r`: Miscellaneous functions such as computing sharpe ratio.
+
 ### Methodology
 We employ a variety of dimensionality reduction techniques:
 
@@ -29,8 +35,26 @@ There are two possible ways to do this. The first way is that, for each iteratio
 
 - **How to choose k in KNN regression**
 
+<<<<<<< HEAD
+A rule of thumb that people often use is to let k equal to the square root of the number of training samples. Is there any other way of doing this? A method that has some sort of theoretical support could be favorable, just like Marcenko-Pastur and PCA.
+
 - **Predicting power of residuals**
+
+Given a built model, we can obtain a vector of residuals. Does this vector have any predicting power? This seems to be correlated with the _mean reversion assumption_. 
+
+**Update**: This now can be done using the `residualpredict()` in `main.r`. The result does not seem good.
 
 - **Better ways of handling `NA` in the dataset**
 
-A naive way is just dropping all the `NA`s in the dataset, which still leaves us with sufficient amount of data to build the models. Is there any other better way of doing this? A couple of options:
+A naive way is just dropping all the `NA`s in the dataset, which still leaves us with sufficient amount of data to build the models. Is there any other better way of doing this? 
+=======
+A rule of thumb that people often use is to let k equal to the square root of the number of training samples. Is there any other way of doing this? A method that has some sort of theoretical support would be favorable, just like Marcenko-Pastur and PCA.
+
+- **Predicting power of residuals**
+
+Given a built model, we can obtain a vector of residuals. Does this vector have any predicting power? This seems to be correlated with the _mean reversion assumption_.
+
+- **Better ways of handling `NA` in the dataset**
+
+A naive way is just dropping all the `NA`s in the dataset, which still leaves us with sufficient amount of data to build the models. Is there any other better way of doing this? We can consider linear/non-linear extrapolation.
+>>>>>>> origin/master
